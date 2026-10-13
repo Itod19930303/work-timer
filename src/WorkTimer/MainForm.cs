@@ -16,6 +16,7 @@ public class MainForm : Form
     readonly Button toggleButton = new() { Text = "開始", AutoSize = true, FlatStyle = FlatStyle.Flat, ForeColor = Color.White, Cursor = Cursors.Hand };
     readonly ComboBox monthBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 140 };
     readonly Button exportButton = new() { Text = "CSV出力", AutoSize = true };
+    readonly Button pdfButton = new() { Text = "報告書PDF", AutoSize = true };
     readonly Panel historyPanel = new() { Dock = DockStyle.Fill, AutoScroll = true };
     readonly System.Windows.Forms.Timer tick = new() { Interval = 1000 };
 
@@ -46,7 +47,7 @@ public class MainForm : Form
         toggleButton.FlatAppearance.BorderSize = 0;
 
         var exportPanel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(16, 12, 16, 0) };
-        exportPanel.Controls.AddRange([monthBox, exportButton]);
+        exportPanel.Controls.AddRange([monthBox, exportButton, pdfButton]);
 
         historyPanel.Padding = new Padding(16, 0, 16, 16);
         Controls.Add(historyPanel);
@@ -62,6 +63,7 @@ public class MainForm : Form
         toggleButton.Click += (_, _) => Toggle();
         monthBox.SelectedIndexChanged += (_, _) => { if (!rendering) RenderHistory(); };
         exportButton.Click += (_, _) => Export();
+        pdfButton.Click += (_, _) => ExportPdf();
         tick.Tick += (_, _) => RenderClock();
 
         RenderTimer();
@@ -118,6 +120,19 @@ public class MainForm : Form
         File.WriteAllText(dlg.FileName, Hours.ToCsv(data.ToSessions(), m.Key), new UTF8Encoding(true));
     }
 
+    void ExportPdf()
+    {
+        if (monthBox.SelectedItem is not MonthItem m) return;
+        using var dlg = new SaveFileDialog { Filter = "PDF (*.pdf)|*.pdf", FileName = $"作業報告書-{m.Key}.pdf" };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        var days = Hours.SummarizeByDate(data.ToSessions()).Where(d => d.Date.StartsWith(m.Key, StringComparison.Ordinal)).ToList();
+        try { ReportPrinter.SavePdf(dlg.FileName, m.Key, days); }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        {
+            MessageBox.Show(this, $"PDFを出力できませんでした。\n{ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
     record MonthItem(string Key)
     {
         public override string ToString() => $"{Key[..4]}年{int.Parse(Key[5..])}月";
@@ -142,7 +157,7 @@ public class MainForm : Form
         rendering = false;
 
         var days = Hours.SummarizeByDate(sessions).Where(d => d.Date.StartsWith(selected, StringComparison.Ordinal)).ToList();
-        exportButton.Enabled = days.Count > 0;
+        exportButton.Enabled = pdfButton.Enabled = days.Count > 0;
 
         historyPanel.SuspendLayout();
         foreach (Control c in historyPanel.Controls) c.Dispose();

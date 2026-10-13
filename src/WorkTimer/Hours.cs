@@ -44,6 +44,14 @@ public static class Hours
             .ToList();
     }
 
+    // 日別の工数を作業名ごとに合算(工数の多い順)。日合計と同じく、日ごとに丸めた値の合計
+    public static List<DayItem> TaskTotals(IEnumerable<DaySummary> days) =>
+        days.SelectMany(d => d.Items)
+            .GroupBy(i => i.Task)
+            .Select(g => new DayItem(g.Key, g.Sum(i => i.Sec), g.Sum(i => i.Hours)))
+            .OrderByDescending(i => i.Hours).ThenBy(i => i.Task, StringComparer.Ordinal)
+            .ToList();
+
     // 記録のある年月(YYYY-MM)を新しい順に
     public static List<string> MonthsOf(IEnumerable<Session> sessions) =>
         sessions.Select(s => DateKey(s.Start)[..7]).Distinct().OrderByDescending(m => m, StringComparer.Ordinal).ToList();

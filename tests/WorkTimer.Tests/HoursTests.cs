@@ -54,3 +54,42 @@ public class HoursTests
         Assert.Equal(["2026-10", "2026-09"], m);
     }
 }
+
+public class ReportTests
+{
+    static long Ms(int d, int h = 9) =>
+        new DateTimeOffset(new DateTime(2026, 10, d, h, 0, 0, DateTimeKind.Local)).ToUnixTimeMilliseconds();
+
+    static List<Session> Sample()
+    {
+        var list = new List<Session>();
+        for (var d = 1; d <= 28; d++)
+        {
+            list.Add(new(d * 10, "案件A 見積対応", Ms(d), Ms(d) + 90 * 60 * 1000));
+            list.Add(new(d * 10 + 1, "案件B 保守", Ms(d, 13), Ms(d, 13) + 40 * 60 * 1000));
+        }
+        return list;
+    }
+
+    [Fact]
+    public void TaskTotals_作業名ごとに日別の丸め値を合算し多い順に並べる()
+    {
+        var t = Hours.TaskTotals(Hours.SummarizeByDate(Sample()));
+        Assert.Equal(["案件A 見積対応", "案件B 保守"], t.Select(x => x.Task));
+        Assert.Equal(28 * 1.5, t[0].Hours);
+        Assert.Equal(28 * 0.75, t[1].Hours);
+    }
+
+    [Fact]
+    public void SavePdf_PDFファイルを書き出す()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "worktimer-report-test.pdf");
+        File.Delete(path);
+        var days = Hours.SummarizeByDate(Sample()).ToList();
+        ReportPrinter.SavePdf(path, "2026-10", days);
+        var bytes = File.ReadAllBytes(path);
+        Assert.True(bytes.Length > 1000);
+        Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(bytes, 0, 4));
+        Console.WriteLine(path);
+    }
+}
